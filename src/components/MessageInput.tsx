@@ -4,14 +4,21 @@ import { SendHorizontal, Bold, Italic, List, Link as LinkIcon } from 'lucide-rea
 import { Button } from '@/components/ui/button';
 import { useChatContext } from '@/context/ChatContext';
 import EmojiPicker from './EmojiPicker';
+import UserMention from './UserMention';
+import { Mention } from '@/context/ChatContext';
 
 const MAX_MESSAGE_LENGTH = 1000;
 
 const MessageInput: React.FC = () => {
-  const { sendMessage } = useChatContext();
+  const { sendMessage, users } = useChatContext();
   const [message, setMessage] = useState('');
   const [isFormatting, setIsFormatting] = useState(false);
   const [html, setHtml] = useState('');
+  const [mentions, setMentions] = useState<Mention[]>([]);
+  const [mentionFilter, setMentionFilter] = useState('');
+  const [showMentions, setShowMentions] = useState(false);
+  const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 });
+  const [lastMentionStart, setLastMentionStart] = useState(-1);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -21,11 +28,55 @@ const MessageInput: React.FC = () => {
     }
   }, []);
 
+  const getCaretCoordinates = () => {
+    const input = inputRef.current;
+    if (!input) return { top: 0, left: 0 };
+
+    const { offsetLeft, offsetTop, selectionEnd, scrollTop } = input;
+    const div = document.createElement('div');
+    div.style.position = 'absolute';
+    div.style.visibility = 'hidden';
+    div.style.whiteSpace = 'pre-wrap';
+    div.style.height = 'auto';
+    div.style.width = `${input.offsetWidth}px`;
+    div.style.fontSize = window.getComputedStyle(input).fontSize;
+    div.style.fontFamily = window.getComputedStyle(input).fontFamily;
+    div.style.lineHeight = window.getComputedStyle(input).lineHeight;
+    div.style.paddingLeft = window.getComputedStyle(input).paddingLeft;
+    div.style.paddingRight = window.getComputedStyle(input).paddingRight;
+    
+    const text = input.value.substring(0, selectionEnd);
+    div.textContent = text;
+    
+    document.body.appendChild(div);
+    const { height, width } = div.getBoundingClientRect();
+    document.body.removeChild(div);
+    
+    // Calculate position relative to input
+    return {
+      top: offsetTop - scrollTop + height + 15, // Add some padding
+      left: offsetLeft + width + 10, // Add some padding
+    };
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Submit on Enter (not Shift+Enter)
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      if (showMentions) {
+        // Don't send message when mention dropdown is open
+        return;
+      }
       handleSendMessage();
+    }
+
+    // Handle navigation in mention dropdown
+    if (showMentions) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowMentions(false);
+      }
+      return;
     }
 
     // Handle shortcuts
@@ -35,10 +86,72 @@ const MessageInput: React.FC = () => {
     } else if (e.key === 'i' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       applyFormat('italic');
+    } else if (e.key === '@') {
+      const input = inputRef.current;
+      if (input) {
+        const pos = getCaretCoordinates();
+        setMentionPosition(pos);
+        setLastMentionStart(input.selectionStart);
+        setMentionFilter('');
+        setShowMentions(true);
+      }
     } else if (e.key === '/' && message === '') {
       // Show commands when typing "/"
       setMessage('/');
     }
+  };
+
+  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newValue = e.target.value;
+    setMessage(newValue);
+    
+    // Check for active mention (@)
+    if (showMentions && inputRef.current) {
+      const cursorPos = inputRef.current.selectionStart;
+      
+      // Extract text between @ and cursor
+      if (lastMentionStart >= 0 && cursorPos > lastMentionStart) {
+        const mentionText = newValue.substring(lastMentionStart + 1, cursorPos);
+        setMentionFilter(mentionText);
+      } else {
+        // If cursor moved before @, close mention dropdown
+        setShowMentions(false);
+      }
+    }
+  };
+
+  const handleSelectMention = (user: User | null) => {
+    if (!user) {
+      setShowMentions(false);
+      return;
+    }
+    
+    const input = inputRef.current;
+    if (!input || lastMentionStart < 0) return;
+    
+    const cursorPos = input.selectionStart;
+    const beforeMention = message.substring(0, lastMentionStart);
+    const afterMention = message.substring(cursorPos);
+    const newMessage = `${beforeMention}@${user.name} ${afterMention}`;
+    
+    // Add to mentions array
+    const newMention: Mention = {
+      userId: user.id,
+      username: user.name,
+      startIndex: lastMentionStart,
+      endIndex: lastMentionStart + user.name.length + 1, // +1 for @
+    };
+    
+    setMentions(prev => [...prev, newMention]);
+    setMessage(newMessage);
+    setShowMentions(false);
+    
+    // Set cursor position after the mention
+    setTimeout(() => {
+      input.focus();
+      const newCursorPos = lastMentionStart + user.name.length + 2; // +2 for @ and space
+      input.setSelectionRange(newCursorPos, newCursorPos);
+    }, 0);
   };
 
   const handleSendMessage = () => {
@@ -52,15 +165,17 @@ const MessageInput: React.FC = () => {
       );
     } else if (isFormatting) {
       // Send formatted message
-      sendMessage(html, true);
+      sendMessage(html, true, mentions.length > 0 ? mentions : undefined);
     } else {
       // Send regular message
-      sendMessage(message);
+      sendMessage(message, false, mentions.length > 0 ? mentions : undefined);
     }
     
     setMessage('');
     setHtml('');
     setIsFormatting(false);
+    setMentions([]);
+    setShowMentions(false);
   };
 
   const applyFormat = (format: 'bold' | 'italic' | 'list' | 'link') => {
@@ -178,13 +293,23 @@ const MessageInput: React.FC = () => {
         <textarea
           ref={inputRef}
           value={message}
-          onChange={(e) => setMessage(e.target.value)}
+          onChange={handleInput}
           onKeyDown={handleKeyDown}
-          placeholder="Type a message..."
+          placeholder="Type a message... (Use @ to mention someone)"
           rows={1}
           className="w-full resize-none outline-none bg-transparent p-2 min-h-[40px] max-h-32 text-sm sm:text-base scrollbar-thin scrollbar-thumb-secondary scrollbar-track-transparent"
           style={{ overflow: 'auto' }}
         />
+        
+        {showMentions && (
+          <UserMention 
+            users={users}
+            filter={mentionFilter}
+            onSelect={handleSelectMention}
+            position={mentionPosition}
+            inputRef={inputRef}
+          />
+        )}
         
         <div className="absolute right-2 bottom-2 flex items-center space-x-2">
           <div className={`text-xs ${isOverLimit ? 'text-destructive' : 'text-muted-foreground'}`}>

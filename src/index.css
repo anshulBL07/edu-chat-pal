@@ -125,4 +125,24 @@
   .text-balance {
     text-wrap: balance;
   }
+  
+  /* User mention styles */
+  .mention {
+    @apply inline-flex items-center px-1 py-0.5 rounded bg-primary/15 text-primary font-medium;
+    transition: background-color 0.2s, color 0.2s;
+  }
+
+  .dark .mention {
+    @apply bg-primary/30;
+  }
+  
+  @keyframes mention-highlight {
+    0% { background-color: theme('colors.primary.500/30'); }
+    50% { background-color: theme('colors.primary.500/15'); }
+    100% { background-color: theme('colors.primary.500/30'); }
+  }
+  
+  .mention-highlight {
+    animation: mention-highlight 2s ease-in-out;
+  }
 }

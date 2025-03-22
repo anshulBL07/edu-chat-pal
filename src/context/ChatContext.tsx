@@ -12,6 +12,13 @@ export interface User {
   isTyping?: boolean;
 }
 
+export interface Mention {
+  userId: string;
+  username: string;
+  startIndex: number;
+  endIndex: number;
+}
+
 export interface Message {
   id: string;
   text: string;
@@ -19,13 +26,15 @@ export interface Message {
   timestamp: Date;
   status: MessageStatus;
   isFormatted?: boolean;
+  mentions?: Mention[];
 }
 
 interface ChatContextType {
   messages: Message[];
   currentUser: User;
   aiUser: User;
-  sendMessage: (text: string, isFormatted?: boolean) => void;
+  users: User[];
+  sendMessage: (text: string, isFormatted?: boolean, mentions?: Mention[]) => void;
   isDarkMode: boolean;
   toggleDarkMode: () => void;
   isAiTyping: boolean;
@@ -48,6 +57,30 @@ const aiUser: User = {
   isTyping: false,
 };
 
+// Sample users for mentions
+const sampleUsers: User[] = [
+  defaultUser,
+  aiUser,
+  {
+    id: 'user-2',
+    name: 'John',
+    avatar: '',
+    status: 'active',
+  },
+  {
+    id: 'user-3',
+    name: 'Sarah',
+    avatar: '',
+    status: 'idle',
+  },
+  {
+    id: 'user-4',
+    name: 'Michael',
+    avatar: '',
+    status: 'offline',
+  },
+];
+
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export const useChatContext = () => {
@@ -69,6 +102,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     },
   ]);
   const [currentUser] = useState<User>(defaultUser);
+  const [users] = useState<User[]>(sampleUsers);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const [isAiTyping, setIsAiTyping] = useState<boolean>(false);
 
@@ -100,26 +134,34 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   // AI response simulation for educational chat
-  const simulateAIResponse = useCallback((userMessage: string) => {
+  const simulateAIResponse = useCallback((userMessage: string, mentions?: Mention[]) => {
     setIsAiTyping(true);
     
     // Simulate thinking time based on message length
     const thinkingTime = Math.max(1500, Math.min(userMessage.length * 50, 3000));
     
     setTimeout(() => {
-      const responses = [
-        "That's a great question! In this context, we should consider multiple perspectives...",
-        "Let me explain this concept in detail. First, we need to understand the fundamental principles...",
-        "I can help you with that. Here's a step-by-step approach to solve this problem...",
-        "This topic is fascinating! Let's explore the key concepts together...",
-        "Let's break this down into smaller parts to make it easier to understand..."
-      ];
+      let response = "";
       
-      const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+      // Check if there are mentions and generate a response about them
+      if (mentions && mentions.length > 0) {
+        const mentionedNames = mentions.map(m => m.username).join(", ");
+        response = `I see you've mentioned ${mentionedNames}. That's great! Let's discuss how we can collaborate on this topic.`;
+      } else {
+        const responses = [
+          "That's a great question! In this context, we should consider multiple perspectives...",
+          "Let me explain this concept in detail. First, we need to understand the fundamental principles...",
+          "I can help you with that. Here's a step-by-step approach to solve this problem...",
+          "This topic is fascinating! Let's explore the key concepts together...",
+          "Let's break this down into smaller parts to make it easier to understand..."
+        ];
+        
+        response = responses[Math.floor(Math.random() * responses.length)];
+      }
       
       const newMessage: Message = {
         id: `ai-msg-${Date.now()}`,
-        text: randomResponse,
+        text: response,
         sender: aiUser,
         timestamp: new Date(),
         status: 'delivered',
@@ -130,7 +172,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, thinkingTime);
   }, []);
 
-  const sendMessage = useCallback((text: string, isFormatted = false) => {
+  const sendMessage = useCallback((text: string, isFormatted = false, mentions?: Mention[]) => {
     if (!text.trim()) return;
     
     const newMessage: Message = {
@@ -140,6 +182,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       timestamp: new Date(),
       status: 'sending',
       isFormatted,
+      mentions,
     };
     
     setMessages(prev => [...prev, newMessage]);
@@ -173,7 +216,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           );
           
           // Now trigger AI response
-          simulateAIResponse(text);
+          simulateAIResponse(text, mentions);
         }, 500);
       }, 500);
     }, 600);
@@ -183,6 +226,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     messages,
     currentUser,
     aiUser,
+    users,
     sendMessage,
     isDarkMode,
     toggleDarkMode,

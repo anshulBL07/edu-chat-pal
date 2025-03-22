@@ -52,6 +52,54 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
       return <div dangerouslySetInnerHTML={{ __html: text }} />;
     }
     
+    if (message.mentions && message.mentions.length > 0) {
+      // Handle mentions in the text
+      let lastIndex = 0;
+      const parts = [];
+      const sortedMentions = [...message.mentions].sort((a, b) => a.startIndex - b.startIndex);
+      
+      sortedMentions.forEach((mention, index) => {
+        // Add text before mention
+        if (mention.startIndex > lastIndex) {
+          parts.push(
+            <React.Fragment key={`text-${index}`}>
+              {text.substring(lastIndex, mention.startIndex)}
+            </React.Fragment>
+          );
+        }
+        
+        // Add mention
+        parts.push(
+          <span 
+            key={`mention-${index}`}
+            className="inline-block bg-primary/20 text-primary-foreground px-1 rounded-md font-medium"
+          >
+            @{mention.username}
+          </span>
+        );
+        
+        lastIndex = mention.startIndex + mention.username.length + 1; // +1 for @
+      });
+      
+      // Add remaining text
+      if (lastIndex < text.length) {
+        parts.push(
+          <React.Fragment key="text-end">
+            {text.substring(lastIndex)}
+          </React.Fragment>
+        );
+      }
+      
+      return (
+        <div>
+          {parts.map((part, i) => (
+            <React.Fragment key={i}>{part}</React.Fragment>
+          ))}
+        </div>
+      );
+    }
+    
+    // Regular text with line breaks
     return text.split('\n').map((line, i) => (
       <React.Fragment key={i}>
         {line}
