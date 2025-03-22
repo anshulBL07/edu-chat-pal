@@ -1,11 +1,9 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { SendHorizontal, Bold, Italic, List, Link as LinkIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useChatContext } from '@/context/ChatContext';
+import { useChatContext, User, Mention } from '@/context/ChatContext';
 import EmojiPicker from './EmojiPicker';
 import UserMention from './UserMention';
-import { Mention } from '@/context/ChatContext';
 
 const MAX_MESSAGE_LENGTH = 1000;
 
@@ -22,7 +20,6 @@ const MessageInput: React.FC = () => {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    // Focus the input when component mounts
     if (inputRef.current) {
       inputRef.current.focus();
     }
@@ -52,25 +49,21 @@ const MessageInput: React.FC = () => {
     const { height, width } = div.getBoundingClientRect();
     document.body.removeChild(div);
     
-    // Calculate position relative to input
     return {
-      top: offsetTop - scrollTop + height + 15, // Add some padding
-      left: offsetLeft + width + 10, // Add some padding
+      top: offsetTop - scrollTop + height + 15,
+      left: offsetLeft + width + 10,
     };
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Submit on Enter (not Shift+Enter)
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (showMentions) {
-        // Don't send message when mention dropdown is open
         return;
       }
       handleSendMessage();
     }
 
-    // Handle navigation in mention dropdown
     if (showMentions) {
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -79,7 +72,6 @@ const MessageInput: React.FC = () => {
       return;
     }
 
-    // Handle shortcuts
     if (e.key === 'b' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       applyFormat('bold');
@@ -96,7 +88,6 @@ const MessageInput: React.FC = () => {
         setShowMentions(true);
       }
     } else if (e.key === '/' && message === '') {
-      // Show commands when typing "/"
       setMessage('/');
     }
   };
@@ -105,16 +96,13 @@ const MessageInput: React.FC = () => {
     const newValue = e.target.value;
     setMessage(newValue);
     
-    // Check for active mention (@)
     if (showMentions && inputRef.current) {
       const cursorPos = inputRef.current.selectionStart;
       
-      // Extract text between @ and cursor
       if (lastMentionStart >= 0 && cursorPos > lastMentionStart) {
         const mentionText = newValue.substring(lastMentionStart + 1, cursorPos);
         setMentionFilter(mentionText);
       } else {
-        // If cursor moved before @, close mention dropdown
         setShowMentions(false);
       }
     }
@@ -134,22 +122,20 @@ const MessageInput: React.FC = () => {
     const afterMention = message.substring(cursorPos);
     const newMessage = `${beforeMention}@${user.name} ${afterMention}`;
     
-    // Add to mentions array
     const newMention: Mention = {
       userId: user.id,
       username: user.name,
       startIndex: lastMentionStart,
-      endIndex: lastMentionStart + user.name.length + 1, // +1 for @
+      endIndex: lastMentionStart + user.name.length + 1,
     };
     
     setMentions(prev => [...prev, newMention]);
     setMessage(newMessage);
     setShowMentions(false);
     
-    // Set cursor position after the mention
     setTimeout(() => {
       input.focus();
-      const newCursorPos = lastMentionStart + user.name.length + 2; // +2 for @ and space
+      const newCursorPos = lastMentionStart + user.name.length + 2;
       input.setSelectionRange(newCursorPos, newCursorPos);
     }, 0);
   };
@@ -158,16 +144,13 @@ const MessageInput: React.FC = () => {
     if (!message.trim()) return;
     
     if (message.startsWith('/help')) {
-      // Handle help command
       sendMessage(
         "Available commands:\n/help - Show this help message\n/bold [text] - Bold text\n/italic [text] - Italic text\n/list - Create a list",
         true
       );
     } else if (isFormatting) {
-      // Send formatted message
       sendMessage(html, true, mentions.length > 0 ? mentions : undefined);
     } else {
-      // Send regular message
       sendMessage(message, false, mentions.length > 0 ? mentions : undefined);
     }
     
@@ -213,7 +196,6 @@ const MessageInput: React.FC = () => {
     setMessage(formattedText);
     setHtml(formattedText);
     
-    // Set cursor position after the inserted text
     setTimeout(() => {
       textarea.focus();
       const newCursorPos = start + insertText.length;
@@ -231,7 +213,6 @@ const MessageInput: React.FC = () => {
     
     setMessage(newMessage);
     
-    // Set cursor position after the inserted emoji
     setTimeout(() => {
       textarea.focus();
       const newCursorPos = start + emoji.length;
